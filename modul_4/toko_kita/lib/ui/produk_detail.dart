@@ -1,20 +1,30 @@
 
 import 'package:flutter/material.dart';
+import 'package:toko_kita/bloc/produk_bloc.dart';
 import 'package:toko_kita/model/produk.dart';
 import 'package:toko_kita/ui/produk_form.dart';
+import 'package:toko_kita/ui/produk_page.dart';
+import 'package:toko_kita/widget/warning_dialog.dart';
 
 class ProdukDetail extends StatefulWidget {
   final Produk? produk;
 
-  const ProdukDetail({super.key, this.produk});
+  const ProdukDetail({
+    Key? key,
+    this.produk,
+  }) : super(key: key);
 
   @override
-  _ProdukDetailState createState() => _ProdukDetailState();
+  State<ProdukDetail> createState() => _ProdukDetailState();
 }
 
 class _ProdukDetailState extends State<ProdukDetail> {
+  bool _isLoading = false;
+
   @override
   Widget build(BuildContext context) {
+    final produk = widget.produk!;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detail Produk'),
@@ -24,17 +34,18 @@ class _ProdukDetailState extends State<ProdukDetail> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              "Kode : ${widget.produk?.kodeProduk ?? '-'}",
+              "Kode : ${produk.kodeProduk}",
               style: const TextStyle(fontSize: 20.0),
             ),
             Text(
-              "Nama : ${widget.produk?.namaProduk ?? '-'}",
+              "Nama : ${produk.namaProduk}",
               style: const TextStyle(fontSize: 18.0),
             ),
             Text(
-              "Harga : Rp. ${widget.produk?.hargaProduk ?? 0}",
+              "Harga : Rp. ${produk.hargaProduk}",
               style: const TextStyle(fontSize: 18.0),
             ),
+            const SizedBox(height: 20),
             _tombolHapusEdit(),
           ],
         ),
@@ -42,6 +53,7 @@ class _ProdukDetailState extends State<ProdukDetail> {
     );
   }
 
+  // Tombol Edit dan Delete
   Widget _tombolHapusEdit() {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -54,45 +66,100 @@ class _ProdukDetailState extends State<ProdukDetail> {
               context,
               MaterialPageRoute(
                 builder: (context) => ProdukForm(
-                  produk: widget.produk,
+                  produk: widget.produk!,
                 ),
               ),
             );
           },
         ),
 
+        const SizedBox(width: 10),
+
         // Tombol Delete
         OutlinedButton(
           child: const Text("DELETE"),
-          onPressed: () => confirmHapus(),
+          onPressed: _isLoading ? null : confirmHapus,
         ),
       ],
     );
   }
 
+  // Dialog konfirmasi penghapusan
   void confirmHapus() {
-    AlertDialog alertDialog = AlertDialog(
-      content: const Text("Yakin ingin menghapus data ini?"),
-      actions: [
-        // Tombol konfirmasi hapus
-        OutlinedButton(
-          child: const Text("Ya"),
-          onPressed: () {
-            // Proses hapus akan dibuat pada tahap integrasi API.
-          },
-        ),
-
-        // Tombol batal
-        OutlinedButton(
-          child: const Text("Batal"),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ],
-    );
-
     showDialog(
       context: context,
-      builder: (context) => alertDialog,
+      builder: (dialogContext) {
+        return AlertDialog(
+          content: const Text(
+            "Yakin ingin menghapus data ini?",
+          ),
+          actions: [
+            // Tombol Ya
+            OutlinedButton(
+              child: const Text("Ya"),
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                hapusProduk();
+              },
+            ),
+
+            // Tombol Batal
+            OutlinedButton(
+              child: const Text("Batal"),
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+            ),
+          ],
+        );
+      },
     );
+  }
+
+  // Proses menghapus produk melalui REST API
+  Future<void> hapusProduk() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result = await ProdukBloc.deleteProduk(
+        id: widget.produk!.id,
+      );
+
+      if (!mounted) return;
+
+      if (result) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ProdukPage(),
+          ),
+          (route) => false,
+        );
+      } else {
+        showDialog(
+          context: context,
+          builder: (context) => const WarningDialog(
+            description: "Hapus produk gagal, silahkan coba lagi",
+          ),
+        );
+      }
+    } catch (error) {
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => const WarningDialog(
+          description: "Terjadi kesalahan saat menghapus produk",
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 }
